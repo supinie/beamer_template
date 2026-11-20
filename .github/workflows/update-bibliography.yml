@@ -14,6 +14,9 @@ permissions:
 
 jobs:
   update:
+    # Only ever runs in the template repos themselves; in projects created from a template the job is skipped,
+    # so a project's bibliography only changes when its submodule is updated by hand.
+    if: endsWith(github.repository, '_template')
     runs-on: ubuntu-latest
     env:
       DEPLOY_KEY: ${{ secrets.BIBLIOGRAPHY_DEPLOY_KEY }}
