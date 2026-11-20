@@ -1,0 +1,51 @@
+name: Update bibliography
+
+# Keeps the bibliography submodule pointing at the latest commit of supinie/bibliography.
+# bibliography is private, so this needs the repository secret BIBLIOGRAPHY_DEPLOY_KEY:
+# the private half of an SSH key whose public half is a read-only deploy key on supinie/bibliography.
+
+on:
+  schedule:
+    - cron: "0 5 * * *" # daily 05:00 UTC, after bibliography's Monday 04:00 cryptobib update
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_KEY: ${{ secrets.BIBLIOGRAPHY_DEPLOY_KEY }}
+    steps:
+      - name: Check for the deploy key secret
+        if: env.DEPLOY_KEY == ''
+        run: echo "::warning::BIBLIOGRAPHY_DEPLOY_KEY is not set; skipping the bibliography update"
+
+      - uses: actions/checkout@v4
+        if: env.DEPLOY_KEY != ''
+
+      - uses: webfactory/ssh-agent@v0.9.0
+        if: env.DEPLOY_KEY != ''
+        with:
+          ssh-private-key: ${{ secrets.BIBLIOGRAPHY_DEPLOY_KEY }}
+
+      - name: Point bibliography at the latest commit
+        if: env.DEPLOY_KEY != ''
+        run: |
+          url=$(git config -f .gitmodules submodule.bibliography.url)
+          latest=$(git ls-remote "$url" refs/heads/main | cut -f1)
+          current=$(git rev-parse HEAD:bibliography)
+          if [ -z "$latest" ]; then
+            echo "::error::Could not read $url"
+            exit 1
+          fi
+          if [ "$latest" = "$current" ]; then
+            echo "bibliography already up to date (${current:0:7})"
+            exit 0
+          fi
+          git update-index --cacheinfo 160000,"$latest",bibliography
+          git config user.name "github-actions[bot]"
+          git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Update bibliography to ${latest:0:7}"
+          git push
